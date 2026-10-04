@@ -1,178 +1,129 @@
-# sample-express-ts-api
+# Spring Boot REST API
 
-A small but realistic **Express 4 + TypeScript** REST API. It is the test subject for the
-Express to **Spring Boot 4** migration toolkit in this repository. It deliberately exercises
-behaviours that are easy to get wrong when porting an Express app to Spring (see
-[Deliberate parity pitfalls](#deliberate-parity-pitfalls)), so a migrated service can be
-compared against it response by response.
+This repository replaces its former Express 4 + TypeScript API with a Java 21 / Spring Boot
+4.0.x service. The Maven application, Java sources, resources, and tests live at repository root;
+there is no `springboot/` submodule or Node runtime. PostgreSQL remains the persistence store and
+the shared schema/seed SQL is in `init/`.
 
-Stack: Express 4.21, TypeScript (strict), TypeORM 0.3 + PostgreSQL (`pg`), zod, jsonwebtoken
-(HS256), bcryptjs, helmet, cors, pino-http, node-cron. Tests use Jest, ts-jest and supertest.
+The original Express implementation remains on `master` as the read-only behavior oracle. This
+feature branch uses the pre-removal baseline and source-derived contract inventory in
+[`.migration/MIGRATION_STATE.md`](.migration/MIGRATION_STATE.md). The recorded Node checks are
+historical pre-removal evidence, not checks run after source removal.
 
-## Running it
+## Build and run
+
+Requirements: JDK 21, Maven 3.9+, and PostgreSQL 16 for database-backed operation.
 
 ```bash
-npm ci
-npm test                 # in-memory repositories, no database needed
-npm run test:coverage
-npm run build && npm start   # needs a Postgres reachable via DATABASE_URL
-npm run dev              # ts-node, no build step
-
-docker compose up -d --build                       # Postgres 16 + API on http://localhost:3000
-docker compose down -v && docker compose up -d     # reset to the seed data
+mvn clean verify
+mvn spring-boot:run
 ```
 
-If the configured port is already in use, startup exits with an actionable message; set
-`PORT` to choose another port.
+For a local PostgreSQL/API stack, use Docker Compose:
 
-## Migrating to Spring Boot 4.0
+```bash
+docker compose up -d --build
+# API: http://localhost:3000
+docker compose down
+```
 
-This repository includes a phase-by-phase GitHub Copilot migration workflow. In VS Code, run
-the **`/migrate-express-to-springboot`** prompt (or select the
-`springboot-migration-orchestrator` agent and ask it to migrate this repository) to start or
-resume the complete migration in one invocation.
+Compose initializes a new empty database from `init/001-schema.sql` and
+`init/002-seed.sql`. Do not use `docker compose down -v` on a database whose data must be kept.
+The application uses `spring.jpa.hibernate.ddl-auto=none`; it does not create or synchronize the
+schema.
 
-The workflow keeps the Express service as a behavior oracle and creates the Spring Boot service
-alongside it under `springboot/`. It records progress in
-[`.migration/MIGRATION_STATE.md`](.migration/MIGRATION_STATE.md). Each phase must develop its
-slice, build, run focused tests, validate API parity, and repeat the build/test/validation loop
-until green before the next phase. If a tool or external service blocks validation, the agent
-records the exact blocker and resumes from the first incomplete phase on the next invocation.
+## Configuration
 
-The reusable workflow lives in
-[`.github/skills/express-to-springboot-migration/SKILL.md`](.github/skills/express-to-springboot-migration/SKILL.md);
-Copilot agents and Java-targeted instructions are under `.github/agents/` and
-`.github/instructions/`.
+Configure the service with environment variables:
 
-Configuration comes from environment variables (see `.env.example`):
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT` | `3000` | HTTP listener |
+| `DATABASE_URL` | Local PostgreSQL `app` database | JDBC connection |
+| `JWT_SECRET` | `dev-secret-change-me` | Production must provide a non-default secret |
+| `JWT_EXPIRES_IN` | `3600` | Token lifetime in seconds |
+| `CORS_ORIGIN` | `*` | Wildcard or comma-separated origin list |
+| `LOG_LEVEL` | `info` | Application/request log threshold |
+| `CLEANUP_CRON` | `*/5 * * * *` | Five-field cron; `off` disables cleanup |
 
-| Variable         | Default                                   | Notes                                       |
-|------------------|-------------------------------------------|---------------------------------------------|
-| `PORT`           | `3000`                                    |                                             |
-| `DATABASE_URL`   | `postgres://app:app@localhost:5432/app`   |                                             |
-| `JWT_SECRET`     | `dev-secret-change-me`                    | must be set when `NODE_ENV=production`      |
-| `JWT_EXPIRES_IN` | `3600`                                    | seconds                                     |
-| `CORS_ORIGIN`    | `*`                                       | `*` or a comma-separated list               |
-| `LOG_LEVEL`      | `info`                                    | pino level                                  |
-| `CLEANUP_CRON`   | `*/5 * * * *`                             | `off` disables the job; also off in `NODE_ENV=test` |
-
-`docker-compose.yml` sets `CLEANUP_CRON=off` by default. Seeded `pending` orders are older
-than 24h, so the job would otherwise expire them within five minutes and the data would no
-longer be deterministic. To enable it, run `CLEANUP_CRON='*/5 * * * *' docker compose up -d`.
+Compose disables cleanup by default so seeded pending orders remain deterministic. If enabled,
+pending orders older than 24 hours are expired.
 
 ## Seed data and credentials
 
-The schema and seed data live in `db/init/001-schema.sql` and `db/init/002-seed.sql`. Both are
-mounted into `/docker-entrypoint-initdb.d`, and TypeORM runs with `synchronize: false`. All ids,
-UUIDs and timestamps are fixed.
+The authoritative database definition and fixtures are `init/001-schema.sql` and
+`init/002-seed.sql`. Startup never creates or synchronizes schema. Fixtures contain six users and
+eight orders:
 
-| id | email               | password   | role  | status  | notes        |
-|----|---------------------|------------|-------|---------|--------------|
-| 1  | `admin@example.com` | `admin123` | admin | active  |              |
-| 2  | `alice@example.com` | `user123`  | user  | active  |              |
-| 3  | `bob@example.com`   | `user123`  | user  | blocked | cannot log in |
-| 4  | `carol@example.com` | `user123`  | user  | active  |              |
-| 5  | `dave@example.com`  | `user123`  | user  | active  | lowercase name (sort/collation) |
-| 6  | `eve@example.com`   | `user123`  | user  | active  | soft-deleted |
+| id | email | password | role / status | Notes |
+|---|---|---|---|---|
+| 1 | `admin@example.com` | `admin123` | admin / active | |
+| 2 | `alice@example.com` | `user123` | user / active | |
+| 3 | `bob@example.com` | `user123` | user / blocked | Cannot log in |
+| 4 | `carol@example.com` | `user123` | user / active | |
+| 5 | `dave@example.com` | `user123` | user / active | Lowercase name exercises sorting |
+| 6 | `eve@example.com` | `user123` | user / active | Soft-deleted |
 
-There are 8 orders, with ids `a1b2c3d4-000N-4000-8000-00000000000N`: 4 paid, 2 pending and 2 expired.
+The eight orders have fixed UUIDs and timestamps: four paid, two pending, and two expired.
 
-## Routes
+## API contract
 
-| Method | Path                 | Auth            | Notes |
-|--------|----------------------|-----------------|-------|
-| GET    | `/health`            | none            | `{ "status": "ok" }` |
-| POST   | `/api/auth/login`    | none            | `{email,password}` → `{ token, expiresIn: 3600 }`, 401 on bad credentials |
-| GET    | `/api/users`         | bearer          | `page` (1-based, default 1), `limit` (default 20, max 100), `status[]`, `sort=name\|-createdAt` → `{ data, page, limit, total }` |
-| GET    | `/api/users/:id`     | bearer          | 404 envelope if missing, soft-deleted or non-numeric |
-| POST   | `/api/users`         | bearer + admin  | 201 + `Location: /api/users/<id>`, 400 VALIDATION_ERROR, 409 CONFLICT |
-| PATCH  | `/api/users/:id`     | bearer + admin  | partial update; omitted fields untouched; `"name": null` → 400 |
-| DELETE | `/api/users/:id`     | bearer + admin  | soft delete → 204, empty body |
-| GET    | `/api/orders`        | bearer          | `status[]`, `from`/`to` (ISO, inclusive), `page`/`limit`; non-admins see only their own orders |
-| GET    | `/api/orders/:id`    | bearer          | 404 envelope if missing, not a UUID, or owned by another user (non-admins) |
+| Method | Path | Authentication | Behavior |
+|---|---|---|---|
+| GET | `/health` | None | `{"status":"ok"}` |
+| POST | `/api/auth/login` | None | Email/password to HS256 bearer JWT; same 401 for invalid, blocked, or deleted user |
+| GET | `/api/users` | Bearer | Page/limit, `status[]`, `sort=name|-createdAt`; `{data,page,limit,total}` |
+| GET | `/api/users/{id}` | Bearer | Missing, deleted, or nonnumeric ID returns 404 |
+| POST | `/api/users` | Bearer + admin | Create; 201 with relative `Location`; validation 400/conflict 409 |
+| PATCH | `/api/users/{id}` | Bearer + admin | Partial update; omitted fields untouched; explicit null rejected |
+| DELETE | `/api/users/{id}` | Bearer + admin | Soft-delete; 204 with empty body |
+| GET | `/api/orders` | Bearer | Page/limit, `status[]`, inclusive ISO `from`/`to`; non-admins see own orders |
+| GET | `/api/orders/{id}` | Bearer | Invalid/missing UUID or another user's order returns 404 |
 
-Without a sort, users come back ordered by id ascending. Orders are ordered by `createdAt`
-ascending, then by id.
+Users default to ID ascending; orders sort by creation time then ID. PostgreSQL `bigint` values
+(`id`, `userId`) and `numeric(10,2)` amounts are JSON strings. Timestamps are UTC with exactly
+three millisecond digits. Errors use `{error:{code,message,details?},requestId}`; unknown routes
+retain the source contract's HTML 404 behavior.
 
-Every error has this shape (the only exception is an unknown route, see below):
+## Source-derived compatibility requirements
 
-```json
-{ "error": { "code": "NOT_FOUND", "message": "User 999 not found", "details": [] }, "requestId": "..." }
-```
+The compatibility list below documents behavior captured from the original Express implementation
+on `master`; it is an implementation and validation contract, not an active Node runtime guide.
 
-The possible codes are `NOT_FOUND`, `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`
-and `INTERNAL`. `details` appears only for validation errors, as a list of `{ path, message, code }`
-items taken from the zod issues.
+1. Extended query parsing supports `status[]=active&status[]=blocked`; a scalar status is also
+   accepted. Express `qs` index-array parsing has an array limit of 20.
+2. PostgreSQL `bigint` IDs and order `userId` values serialize as decimal strings.
+3. `NUMERIC(10,2)` amounts serialize as strings with trailing zeroes preserved.
+4. Dates serialize in UTC using exactly three millisecond digits.
+5. An unknown route returns HTML containing `Cannot GET /...`, not the JSON error envelope.
+6. Paths match case-insensitively and tolerate a trailing slash.
+7. User creation uses a relative `Location: /api/users/<id>`.
+8. Successful delete is 204 with no body and no `Content-Type`.
+9. JSON responses use `application/json; charset=utf-8`.
+10. JSON/send responses have weak ETags and honor `If-None-Match` with 304.
+11. The source cleanup schedule accepts a five-field cron expression (optionally seconds-prefixed);
+    Spring scheduling uses a six-field expression.
+12. Unknown JSON object fields are stripped rather than rejected.
+13. Responses include `X-Powered-By: Express` for exact legacy compatibility.
+14. A valid `x-request-id` matching `[A-Za-z0-9._:-]{1,128}` is echoed; otherwise a UUID is
+    generated. Malformed JSON is a 400 validation error and JSON is limited to 100kb.
+15. Login uses the same 401 result for wrong password, blocked, deleted, and unknown users.
+    Non-numeric user IDs and invalid/foreign order IDs are deliberately reported as 404.
 
-Example:
+The error envelope is
+`{"error":{"code":"NOT_FOUND","message":"User 999 not found"},"requestId":"..."}`. Validation
+errors include `details` items shaped as `{path,message,code}`. Error codes are `NOT_FOUND`,
+`VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, and `INTERNAL`.
 
-```bash
-TOKEN=$(curl -s -XPOST localhost:3000/api/auth/login -H 'content-type: application/json' \
-  -d '{"email":"admin@example.com","password":"admin123"}' | jq -r .token)
-curl -g "localhost:3000/api/users?page=1&limit=2&status[]=active" -H "Authorization: Bearer $TOKEN"
-```
+## Migration workflow and evidence
 
-## Layout
+To continue the phased migration, invoke `/migrate-express-to-springboot` or the
+`springboot-migration-orchestrator` agent. The durable workflow is in
+[`.github/skills/express-to-springboot-migration/SKILL.md`](.github/skills/express-to-springboot-migration/SKILL.md);
+agent prompts and root-Java instructions are under `.github/agents/` and `.github/instructions/`.
+Implementation is feature-branch-only on the existing `feature/NAVDEVOPS-1`; master is read-only.
+The migration state file records baseline, per-phase build/test/parity evidence, limitations, and
+final validation.
 
-```
-src/
-  app.ts            createApp(deps): DI of repositories, so tests use in-memory fakes
-  server.ts         boots TypeORM DataSource + app + cron job
-  config.ts         env parsing
-  errors.ts         AppError hierarchy
-  types.ts          Express Request augmentation (requestId, user)
-  db/               TypeORM DataSource
-  entities/         User, Order + DTO mappers
-  repositories/     interfaces, typeorm/ implementations, memory/ implementations
-  services/         AuthService, UserService, OrderService
-  schemas/          zod schemas (bodies + query strings)
-  middleware/       requestId, auth (authenticate, requireRole), errorHandler, asyncHandler
-  routes/           health, auth, users, orders
-  jobs/             expirePendingOrders (node-cron)
-tests/              integration (supertest) + unit tests
-db/init/            schema + seed SQL
-```
-
-## Deliberate parity pitfalls
-
-A faithful Spring Boot port has to reproduce, or consciously change, each of these behaviours:
-
-1. **qs array query syntax.** Express 4's extended `qs` parser turns `?status[]=active&status[]=blocked`
-   into an array, `?status=active` into a string, and `?status[0]=a` into an array as well. Indices
-   above 20 turn into an object, because of qs's `arrayLimit`. Spring binds `status` and not `status[]`.
-2. **bigint ids come back as strings.** node-postgres returns `int8` as a string, so the JSON has
-   `"id": "1"` and `"userId": "2"`. Jackson would serialize a `Long` as a number.
-3. **numeric amounts come back as strings.** `NUMERIC(10,2)` is returned as `"19.90"` or `"5.00"`, with
-   trailing zeros kept. Jackson writes a `BigDecimal` as the number `19.9` by default.
-4. **Date format.** JS `Date#toJSON()` always writes UTC with exactly three millisecond digits
-   (`2024-01-01T09:00:00.000Z`). Jackson's default `OffsetDateTime`/`Instant` output drops or
-   varies the fraction and may keep the offset.
-5. **Express default HTML 404.** No catch-all is registered, so unknown routes return
-   `text/html` `Cannot GET /api/nope` instead of the JSON envelope. Spring returns its own
-   JSON or whitelabel error.
-6. **Routing is case-insensitive and ignores trailing slashes.** `/HEALTH` and `/health/` both
-   match. Spring 6+ matches trailing slashes strictly and paths case-sensitively.
-7. **201 + Location.** `POST /api/users` sends back a *relative* `Location: /api/users/7`.
-   `ServletUriComponentsBuilder` usually produces an absolute URL.
-8. **204 has an empty body.** `DELETE` sends no body and no `Content-Type`.
-9. **charset in Content-Type.** Express sends `application/json; charset=utf-8`. Spring sends
-   `application/json`.
-10. **ETag.** Express adds a weak `ETag: W/"..."` to every `res.json`/`res.send` and answers
-    `If-None-Match` with 304. Spring does neither unless you add `ShallowEtagHeaderFilter`.
-11. **Cron has 5 fields.** `CLEANUP_CRON=*/5 * * * *` is in node-cron's 5-field format, with an
-    optional leading seconds field. Spring `@Scheduled(cron=...)` needs 6 fields (seconds first).
-12. **zod drops unknown keys.** `{"isSuperuser": true}` is silently dropped rather than rejected.
-    Jackson's behaviour depends on `FAIL_ON_UNKNOWN_PROPERTIES`.
-13. **X-Powered-By: Express is still sent.** helmet is configured with `xPoweredBy: false`, so
-    the header survives.
-
-Other behaviours worth checking:
-
-- Express 4 does not catch rejected promises, which is why `asyncHandler` exists.
-- A non-numeric `:id` returns 404, not 400.
-- Login returns the same 401 for a blocked user, a soft-deleted user and a wrong password.
-- PATCH treats a missing field differently from `null`.
-- `x-request-id` is echoed back on every response.
-- The default 100kb JSON body limit applies.
-- Malformed JSON returns 400 `VALIDATION_ERROR`.
-- Postgres collation on Alpine sorts `dave davis` after the capitalised names.
+Root layout: `pom.xml`, `src/main/java/`, `src/main/resources/`, `src/test/java/`, shared `init/`
+SQL, and repository-level workflow/evidence.

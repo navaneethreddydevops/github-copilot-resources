@@ -1,23 +1,19 @@
 # syntax=docker/dockerfile:1
 
-# ---- build stage ----
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY tsconfig.json tsconfig.build.json ./
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+WORKDIR /workspace
+COPY pom.xml .
 COPY src ./src
-RUN npm run build
+RUN mvn -B -DskipTests package
 
-# ---- runtime stage ----
-FROM node:22-alpine AS runtime
-ENV NODE_ENV=production
+FROM eclipse-temurin:21-jre-alpine AS runtime
+RUN apk add --no-cache curl \
+    && addgroup -S app \
+    && adduser -S -G app app
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
-USER node
+COPY --from=build /workspace/target/express-api-replacement-1.0.0.jar app.jar
+USER app
 EXPOSE 3000
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
-  CMD wget -qO- http://127.0.0.1:3000/health || exit 1
-CMD ["node", "dist/server.js"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:3000/health || exit 1
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
