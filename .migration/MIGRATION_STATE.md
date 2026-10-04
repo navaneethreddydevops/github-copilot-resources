@@ -1,8 +1,17 @@
 # Express to Spring Boot 4.0 migration state
 
 This file is the persistent progress record for `.github/prompts/migrate-express-to-springboot.prompt.md`.
-Update it after every verified phase. The repository's Node implementation remains the behavior
-oracle and must remain intact until all phases are validated.
+Update it after every verified phase. The original Node implementation on `master` is the behavior
+oracle. Perform migration work and final legacy cleanup only on `feature/NAVDEVOPS-1`; keep `master`
+unchanged.
+
+## Branch workflow
+
+- Verify the starting branch is `master` and the worktree is safe before establishing the Node build/test baseline.
+- Create `feature/NAVDEVOPS-1` from `master` before any migration implementation or migration-file edits.
+- Use `master` only for read-only source inspection when further Node details are needed. Return to and verify `feature/NAVDEVOPS-1` before editing; never force a checkout or discard feature work.
+- Keep Node files available through all parity phases. After every phase and full pre-cleanup check passes and is recorded, remove the Node implementation and obsolete Node-only project references on the feature branch only.
+- After cleanup, rerun the full Spring Boot build/test suite and applicable runtime checks. Retain this state file and other migration evidence; the original Node source remains on `master`.
 
 ## Current status
 
