@@ -7,12 +7,21 @@ description: "Run or resume the complete, phased migration of this Express TypeS
 
 Use this skill with `springboot-migration-orchestrator` and `.migration/MIGRATION_STATE.md`. A single migration invocation must run each phase in order and repeat the develop → build → test → validate loop for that phase before starting the next. Do not stop after planning or scaffolding.
 
+## Feature branch replacement workflow
+
+For the `feature/NAVDEVOPS-1` migration, perform the replacement only on that feature branch. Do not create or switch branches as an unstated side effect of this skill; if the branch does not exist, stop and report that it must be created before implementation.
+
+1. Before deleting anything, inspect `master` as a read-only reference for the established migration direction and repository conventions. The orchestrator may ask a migration agent to inspect `master`; keep that work read-only and apply implementation changes only to `feature/NAVDEVOPS-1`.
+2. Capture and record the Node application's build/test baseline and all API, persistence, runtime, and compatibility contracts needed for parity. Preserve the exact check results in `.migration/MIGRATION_STATE.md`.
+3. After the baseline and contract inventory are recorded, remove the Node application files from `feature/NAVDEVOPS-1` and implement the Spring Boot replacement there, using the ordered phases below. Do not delete shared assets needed by the replacement (for example, PostgreSQL schema/seed SQL), migration records, or repository documentation without first updating/replacing their required content.
+4. Keep `master` unchanged. Since the Node application is removed from the feature branch, use the recorded baseline/contracts and the read-only `master` reference for parity comparisons; do not claim to rerun Node checks after their files have been removed.
+
 ## Before implementation
 
 1. Read `.migration/MIGRATION_STATE.md`, root `README.md`, `.github/instructions/springboot-migration.instructions.md`, and the relevant source/tests.
 2. Confirm the working tree has no task-related uncommitted changes that would be overwritten. Do not revert existing work.
 3. Establish the source baseline using the available Node build and tests (`npm run build`, focused `npm test -- --runInBand ...`, and full `npm test` when needed). Record actual command results; if the environment cannot run a check, record why.
-4. Keep Node and Spring Boot side by side in `springboot/`. Do not assume a database is available. Use the existing in-memory/fake tests for contract slices and add database-backed checks when the configured environment supports them.
+4. Do not keep the Node application side by side on `feature/NAVDEVOPS-1`: first finish the baseline and contract inventory, then remove Node application files on that branch before implementing the replacement. Do not assume a database is available. Use in-memory/fake tests for contract slices and add database-backed checks when the configured environment supports them.
 5. Use Spring Boot 4.0.x stable with Java 21. Determine an available stable 4.0.x patch rather than guessing a version or selecting a snapshot/newer minor version. Avoid downloading dependencies unless a required build tool or dependency is missing.
 
 ## Ordered migration phases
@@ -20,8 +29,8 @@ Use this skill with `springboot-migration-orchestrator` and `.migration/MIGRATIO
 ### Phase 0 — Baseline and Java module
 
 - Confirm the current Express tests/build and extract endpoint, DTO, error, auth, SQL, and parity contracts from code and docs.
-- Add a minimal independently buildable Maven Spring Boot 4.0.x application under `springboot/`, with Java 21 and a documented local build command.
-- Keep the Node application unchanged. Test the new module and confirm the original tests still pass.
+- Record the baseline and contracts before deleting source files. Then remove Node application files from `feature/NAVDEVOPS-1` and add a minimal independently buildable Maven Spring Boot 4.0.x application under `springboot/`, with Java 21 and a documented local build command.
+- Keep shared database assets and migration evidence required by the replacement. Build and test the new module; record Node check results gathered before removal.
 
 ### Phase 1 — Runtime, configuration, health, and HTTP foundation
 
@@ -51,13 +60,13 @@ Use this skill with `springboot-migration-orchestrator` and `.migration/MIGRATIO
 
 - Reconcile cross-cutting parity: Express extended query parsing (`status[]`), unknown fields, error envelope/details, route case and trailing slash, default HTML unknown-route 404, relative `Location`, empty 204, JSON charset, weak ETag/If-None-Match, 100kb body limit, and `X-Powered-By`.
 - Add focused tests for every documented parity pitfall. Record any intentional divergence with evidence and user approval; do not silently waive one.
-- Run an endpoint-by-endpoint comparison against Node tests or actual responses and close all unexplained differences.
+- Run an endpoint-by-endpoint comparison against the recorded Node baseline/contracts and the read-only `master` reference; close all unexplained differences. Do not report post-removal Node checks as run.
 
 ### Phase 6 — Cleanup job, packaging, operations, and cutover readiness
 
 - Port pending-order expiry and scheduling, including disabled/test behavior, five-field Node cron conversion to Spring's six-field expression, error reporting, and graceful shutdown.
 - Add or update Spring Boot container/local run documentation and ensure the shared Postgres/seed setup works without destructive resets.
-- Run the full Node and Java build/test suites and available integration/runtime checks. Do not remove the Node service; mark cutover readiness only after all required evidence is recorded.
+- Run the full Java build/test suites and available integration/runtime checks. Include the recorded pre-removal Node baseline results in the final evidence; do not claim the Node suite can run from the replacement branch. Mark cutover readiness only after all required evidence is recorded.
 
 ## Required loop for every phase
 
@@ -65,9 +74,9 @@ For each phase above, in order:
 
 1. **Develop:** make the smallest complete implementation and focused regression tests; update directly related documentation.
 2. **Build:** compile/package the Spring Boot module with the repository's available Maven wrapper or Maven command.
-3. **Test:** run focused Java tests and relevant Express contract tests; broaden to full suites when a shared behavior is touched.
+3. **Test:** run focused Java tests and, before Node files are removed, relevant Express contract tests. After removal, use the recorded Node evidence/contracts and Java regression tests; broaden Java coverage when a shared behavior is touched.
 4. **Validate:** review the implementation against source and docs; execute runtime checks where feasible; invoke the validator role/checklist and report exact parity evidence.
 5. Fix every build/test/validation issue and repeat **build → test → validate** until green. Do not advance on red, skipped-without-explanation, or guessed results.
 6. Record phase status, files, exact commands/results, parity coverage/gaps, blocker (if any), and next phase in `.migration/MIGRATION_STATE.md`.
 
-At completion, verify all phases and their required checks, summarize any approved divergences or environmental limitations, and leave the original Node baseline intact.
+At completion, verify all phases and their required checks, summarize any approved divergences or environmental limitations, and confirm `master` remains unchanged while the Node application has been replaced only on `feature/NAVDEVOPS-1`.
