@@ -22,6 +22,25 @@ docker compose up -d --build                       # Postgres 16 + API on http:/
 docker compose down -v && docker compose up -d     # reset to the seed data
 ```
 
+## Migrating to Spring Boot 4.0
+
+This repository includes a phase-by-phase GitHub Copilot migration workflow. In VS Code, run
+the **`/migrate-express-to-springboot`** prompt (or select the
+`springboot-migration-orchestrator` agent and ask it to migrate this repository) to start or
+resume the complete migration in one invocation.
+
+The workflow keeps the Express service as a behavior oracle and creates the Spring Boot service
+alongside it under `springboot/`. It records progress in
+[`.migration/MIGRATION_STATE.md`](.migration/MIGRATION_STATE.md). Each phase must develop its
+slice, build, run focused tests, validate API parity, and repeat the build/test/validation loop
+until green before the next phase. If a tool or external service blocks validation, the agent
+records the exact blocker and resumes from the first incomplete phase on the next invocation.
+
+The reusable workflow lives in
+[`.github/skills/express-to-springboot-migration/SKILL.md`](.github/skills/express-to-springboot-migration/SKILL.md);
+Copilot agents and Java-targeted instructions are under `.github/agents/` and
+`.github/instructions/`.
+
 Configuration comes from environment variables (see `.env.example`):
 
 | Variable         | Default                                   | Notes                                       |
