@@ -11,6 +11,7 @@ INSERT INTO users (id, email, name, role, status, password_hash, created_at, upd
   (5, 'dave@example.com',  'dave davis',     'user',  'active',  '$2a$10$qDk1LEduG5rDTXe7u9IfweOQaMrcecb2FyJV5vebqlOniH/M/kaqG', '2024-01-05T13:45:00.000Z', '2024-01-05T13:45:00.000Z', NULL),
   (6, 'eve@example.com',   'Eve Evans',      'user',  'active',  '$2a$10$qDk1LEduG5rDTXe7u9IfweOQaMrcecb2FyJV5vebqlOniH/M/kaqG', '2024-01-06T14:00:00.000Z', '2024-03-01T00:00:00.000Z', '2024-03-01T00:00:00.000Z');
 
+-- Keep the sequence in sync with the explicit ids above.
 SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
 
 INSERT INTO orders (id, user_id, status, amount, created_at) VALUES

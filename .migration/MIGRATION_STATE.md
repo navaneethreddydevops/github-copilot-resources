@@ -81,8 +81,8 @@ Primary source evidence: master `README.md`, `src/app.ts`, `src/server.ts`, `src
 ## Current status
 
 - Overall: In progress
-- Active phase: Phase 0 — Baseline and root-level Java application
-- Last verified phase: Node baseline/contract inventory only (phase 0 remains incomplete)
+- Active phase: Phase 1 — Runtime, configuration, health, and HTTP foundation
+- Last verified phase: Phase 0 — Baseline and root-level Java application
 - Target: Stable Spring Boot 4.0.x, Java 21, Maven application at repository root
 - Last updated: 2026-10-04
 - Blocker: None recorded
@@ -91,8 +91,8 @@ Primary source evidence: master `README.md`, `src/app.ts`, `src/server.ts`, `src
 
 | Phase | Scope | Status | Build / test / validation evidence |
 |---|---|---|---|
-| 0 | Baseline and root-level Java application | In progress | Master Node baseline recorded above; Java module/build checks pending |
-| 1 | Runtime, configuration, health, and HTTP foundation | Not started | |
+| 0 | Baseline and root-level Java application | Complete | Java 21 / Spring Boot 4.0.8; `mvn -B clean verify` PASS (1 test); `docker compose config --quiet` PASS; SQL byte-identical to master; root-level app and no Node runtime / `springboot/` confirmed |
+| 1 | Runtime, configuration, health, and HTTP foundation | In progress | |
 | 2 | PostgreSQL persistence and data representation | Not started | |
 | 3 | User API and authentication | Not started | |
 | 4 | Orders API | Not started | |
@@ -105,3 +105,30 @@ For each phase, record completion date, changed files, exact build/test/validati
 results, concrete contract evidence, any approved divergence or skipped check with reason, blocker,
 and next phase. No phase is complete without a passing build, focused tests, and actual parity
 validation. Final cutover requires complete Java checks and a confirmation that master is unchanged.
+
+### Phase 0 — Complete (2026-10-04)
+
+- Changed/added: root `pom.xml`; root `src/main/java/com/example/api/ApiApplication.java`,
+  `HealthController.java`; `src/main/resources/application.properties`;
+  `src/test/java/com/example/api/ApiApplicationTests.java`; restored `init/001-schema.sql` and
+  `init/002-seed.sql`; Java 21 root `Dockerfile`/`docker-compose.yml`; root Java `README.md`;
+  `.gitignore`; migration skill, agents, prompt, and root-Java instructions.
+- Baseline evidence is the pre-removal master run above. The target branch was already missing Node
+  sources at its starting commit, so no Node files were newly deleted in this run.
+- Spring Boot patch verified against Maven Central metadata: stable `4.0.8`. JDK used:
+  Corretto `21.0.12.1`.
+- Initial Maven verification found the Boot 4 MockMvc test annotation moved to
+  `org.springframework.boot.webmvc.test.autoconfigure`; fixed the import and repeated checks.
+- Validator checklist identified the stale Node Docker image and wrong `./db/init` mount. Replaced
+  the image with Java 21 and mounted the shared root `init/` directory; `docker compose config
+  --quiet` passes after correction.
+- Exact checks: `JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home
+  /opt/homebrew/bin/mvn -B clean verify` — PASS, 1 test, 0 failures/errors/skips, packaged
+  `target/express-api-replacement-1.0.0.jar`; `docker compose config --quiet` — PASS;
+  `git show master:init/001-schema.sql | diff -u - init/001-schema.sql` and the analogous seed
+  command — both PASS (byte-identical); `git diff --check` — PASS. Confirmed `springboot/` and
+  Node runtime/package files absent, and Java source/tests at root.
+- No PostgreSQL/container runtime check was performed in phase 0. `master` ref remained
+  `9388ce67783b3912f06970131466a12dfede4c99`; target branch remained
+  `feature/NAVDEVOPS-1`.
+- Next: Phase 1.
