@@ -22,6 +22,9 @@ docker compose up -d --build                       # Postgres 16 + API on http:/
 docker compose down -v && docker compose up -d     # reset to the seed data
 ```
 
+If the configured port is already in use, startup exits with an actionable message; set
+`PORT` to choose another port.
+
 ## Migrating to Spring Boot 4.0
 
 This repository includes a phase-by-phase GitHub Copilot migration workflow. In VS Code, run

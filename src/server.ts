@@ -1,9 +1,11 @@
 import 'reflect-metadata';
+import type { Server } from 'node:http';
 import pino from 'pino';
 import { createApp } from './app';
 import { loadConfig } from './config';
 import { createDataSource } from './db/data-source';
 import { scheduleCleanupJob } from './jobs/expirePendingOrders';
+import { listenHttpServer, PortInUseError } from './listenHttpServer';
 import { TypeOrmOrderRepository } from './repositories/typeorm/TypeOrmOrderRepository';
 import { TypeOrmUserRepository } from './repositories/typeorm/TypeOrmUserRepository';
 
@@ -19,15 +21,23 @@ async function main(): Promise<void> {
   const orderRepository = new TypeOrmOrderRepository(dataSource);
 
   const app = createApp({ userRepository, orderRepository, config, logger });
+  let server: Server;
+  try {
+    server = await listenHttpServer(app, config.port);
+  } catch (err) {
+    if (!(err instanceof PortInUseError)) throw err;
+    logger.error(err.message);
+    await dataSource.destroy();
+    process.exitCode = 1;
+    return;
+  }
+  logger.info({ port: config.port }, 'HTTP server listening');
+
   const task = scheduleCleanupJob({
     cronExpression: config.cleanupCron,
     nodeEnv: config.nodeEnv,
     orders: orderRepository,
     logger,
-  });
-
-  const server = app.listen(config.port, () => {
-    logger.info({ port: config.port }, 'HTTP server listening');
   });
 
   const shutdown = (signal: string) => {
