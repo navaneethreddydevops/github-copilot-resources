@@ -1,0 +1,47 @@
+# Deterministic local stack: `docker compose down -v && docker compose up -d --build`
+# recreates the database from db/init/*.sql.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://app:app@db:5432/app
+      JWT_SECRET: local-dev-secret-not-for-production
+      JWT_EXPIRES_IN: "3600"
+      CORS_ORIGIN: "*"
+      LOG_LEVEL: info
+      # Off by default so seeded 'pending' orders stay deterministic for parity tests.
+      # Enable with e.g.: CLEANUP_CRON='*/5 * * * *' docker compose up -d
+      CLEANUP_CRON: ${CLEANUP_CRON:-off}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+volumes:
+  db-data:
